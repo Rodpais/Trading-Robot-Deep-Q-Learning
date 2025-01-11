@@ -1,4 +1,5 @@
 {
     "editor.formatOnSave": false,
-    "editor.formatOnSaveMode": "modificationsIfAvailable"
+    "editor.formatOnSaveMode": "modificationsIfAvailable",
+    "CodeGPT.apiKey": "CodeGPT Plus Beta"
 }

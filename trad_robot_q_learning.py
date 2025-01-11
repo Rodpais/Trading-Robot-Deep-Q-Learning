@@ -44,17 +44,17 @@
 # EXECUTAR NA PRIMEIRA EXECUÇÃO!
 
 # %%
-pip install yfinance
+#pip install yfinance
 
 # %%
 # EXECUTAR NA PRIMEIRA EXECUÇÃO!
 
-# Bitcoin Hora a hora - Data download
-!gdown --id '1VQry5JMRcuZ_BStIX8-FB8n4zFuDNUjk'
+# Bitcoin Hora a hora - Data download !gdown --id '1VQry5JMRcuZ_BStIX8-FB8n4zFuDNUjk'
+
 
 # %%
 # Imports
-
+import requests
 import math
 import random
 import numpy as np
@@ -66,14 +66,19 @@ import pandas_datareader as data_reader
 from tqdm import tqdm_notebook, tqdm
 from collections import deque
 
-import pandas
 from pandas_datareader import data as pdr
 import yfinance as yfin
 import datetime
 
 import numpy as np
-from tensorflow import keras
-from tensorflow.keras import layers
+from tensorflow.python import keras
+from tensorflow.python.keras import layers
+
+url = 'https://drive.google.com/uc?id=1VQry5JMRcuZ_BStIX8-FB8n4zFuDNUjk'
+response = requests.get(url)
+
+with open('bitcoin_data.csv', 'wb') as f:
+    f.write(response.content)
 
 debug = 1
 
@@ -218,36 +223,35 @@ def dataset_loader(stock_name, initial_date, final_date):
 
 # %% [markdown]
 # # State Creator
-# 
+#
 # Primeiro vamos traduzir o problema para um ambiente de aprendizado por reforço.
 # 
 # * Cada ponto no gráfico é um ponto flutuante que representa o valor no momento do tempo.
-# 
+#
 # * Devemos prever o que acontecerá no próximo período de tempo, usando umas das 3 possibilidades de ação: compra, venda ou sem ação (esperar)
-# 
+#
 # Inicialmente vamos usar uma janela de 5 estados anteriores, para tentar prever o próximo.
-# 
+#
 # ```windows_size = 5```
-# 
+#
 # Ao invés vez de prever valores reais para nosso alvo, queremos prever uma de nossas 3 ações.
-# 
+#
 # Em seguida, mudamos nossos estados de entrada para diferenças nos preços das ações, que representarão as mudanças de preços ao longo do tempo.
-# 
-
+#
 # %%
 # State Creator
 
 
 def state_creator(data, timestep, window_size):
-
-  # O index incial (starting_id) será o timestep (passos/dias que já foram dados)
-  # menos o tamanho da janela, que serão os dias olhados para trás.
+    # O index inicial (starting_id) será o timestep (passos/dias que já foram dados)
+    # menos o tamanho da janela, que serão os dias olhados para trás.
   starting_id = timestep - window_size + 1
-
-  if(debug):{print('Timestep = ', timestep)}
-  if(debug):{print('Window_size = ', window_size)}
-  if(debug):{print("Starting id = ", starting_id)}
-
+  if debug:
+      print('Timestep = ', timestep)
+  if debug:
+      print('Window_size = ', window_size)
+  if debug:
+      print("Starting id = ", starting_id)
   if starting_id >= 0:
     windowed_data = data[starting_id: timestep + 1]
 
@@ -260,19 +264,19 @@ def state_creator(data, timestep, window_size):
     if(debug):{print("Entrou no Else. Starting id = ", starting_id)}
     if(debug):{print("w_d = ", windowed_data)}
 
-  state = [] # Criou uma array vazia para o estado
+state = [] # Criou uma array vazia para o estado
 
-  if(debug):{print('Vai entrar no FOR de normalização:')}
+if(debug):{print('Vai entrar no FOR de normalização:')}
 
-  for i in range(window_size - 1):
-    if(debug):{print('windowed_data[i + 1] = ', windowed_data[i+1])}
-    if(debug):{print('windowed_data[i] = ', windowed_data[i])}
+for i in range(window_size - 1):
+  if(debug):{print('windowed_data[i + 1] = ', windowed_data[i+1])}
+  if(debug):{print('windowed_data[i] = ', windowed_data[i])}
 
-    state.append(sigmoid(windowed_data[i + 1] - windowed_data[i]))
+  state.append(sigmoid(windowed_data[i + 1] - windowed_data[i]))
 
-    if(debug):{print('state = ',state)}
+  if(debug):{print('state = ',state)}
 
-  return np.array([state])
+return np.array([state])
 
 # %%
 
@@ -359,7 +363,6 @@ elif action == 2 and len(trader.inventory) > 0: #Selling
 
   buy_price = trader.inventory.pop(0)
   if(debug):{print('Buy Price = ', buy_price)}
-  
   reward = max(data[t] - buy_price, 0)
   if(debug):{print('dat[t] = ', data[t])}
   if(debug):{print('Reward = ', reward)}
@@ -379,7 +382,7 @@ if(debug):{print('------ SAVING MEMORY:')}
 trader.memory.append((state, action, reward, next_state, done))
 if(debug):{print('Memory = ', trader.memory)}
 
-    
+
 state = next_state
 
 t = t+1
@@ -410,51 +413,80 @@ print(np.argmax(a))
 
 
 for episode in range(1, episodes + 1):
-  
+
   print("Episode: {}/{}".format(episode, episodes))
-  
+
   state = state_creator(data, 0, window_size + 1)
-  
+
   total_profit = 0
   trader.inventory = []
-  
-  for t in tqdm(range(data_samples)):
-    
+
+  #  O loop de treinamento que será executado durante uma época inteira
+for t in tqdm(range(data_samples)):
+
+    # O IA executa a função trade, que responderá com a ação que deve ser tomada
     action = trader.trade(state)
-    
+
+    # já foi dfinido o próximo estado
+    # note que o definimos com t+1, pois estamos  considerando o próximo.
+    # o valor da açao no index da tabela de dados.
     next_state = state_creator(data, t+1, window_size + 1)
+    # sem recompensas até agora
     reward = 0
-    
-    if action == 1: #Buying
+
+# Sem ação
+    if action == 0:
+      # Apenas um print e Recompensa = 0
+      print(" - Sem ação | Total de papeis no portfolio = ", len(trader.inventory))
+
+    # Compra
+    if action == 1: #Comprando
+      # Recompensa = 0
+
+      # Adicionamos a ação comprada na array de portfolio
       trader.inventory.append(data[t])
-      print("AI Trader bought: ", stock_price_format(data[t]))
-      
-    elif action == 2 and len(trader.inventory) > 0: #Selling
+
+      print(" - AI Trader Comprou: ", stock_price_format(data[t]))
+
+    # Venda (Deve possuir ações no portfolio)
+    elif action == 2 and len(trader.inventory) > 0:   #vendendo
+
+      # Remove última ação do portfólio e a retorna
       buy_price = trader.inventory.pop(0)
-      
+
+      # Recompensa = lucro ou 0 se houve prejuízo.
       reward = max(data[t] - buy_price, 0)
-      total_profit += data[t] - buy_price
-      print("AI Trader sold: ", stock_price_format(data[t]), " Profit: " + stock_price_format(data[t] - buy_price) )
-      
+
+      total_profit += data[t] - buy_price # Soma ao lucro/prejuízo total
+
+      print(" - AI Trader Vendeu: ", stock_price_format(data[t]), " - Lucro: " + stock_price_format(data[t] - buy_price) )
+
+
+    # Verifica se estamos no final de uma época
     if t == data_samples - 1:
       done = True
     else:
       done = False
-      
+
+
+    # Salvamos os dados na memória, na mesma ordem que na função BATCH_TRAIN
     trader.memory.append((state, action, reward, next_state, done))
-    
+
+    # Definimos que o estado atual é o próximo estado calculado anteriormente
     state = next_state
-    
+
     if done:
       print("########################")
-      print("TOTAL PROFIT: {}".format(total_profit))
+      print("LUCRO TOTAL: {}".format(total_profit))
       print("########################")
-    
+
+
+    # Se o tamanho da memória for maior que o tamanho do lote que definimos
+    # Então vamos treinar a rede, passando o tamanho do lote como argumento
     if len(trader.memory) > batch_size:
       trader.batch_train(batch_size)
-      
-  if episode % 10 == 0:
-    trader.model.save("ai_trader_{}.h5".format(episode))
-    
 
+  # A Cada 10 episódios treinados, salvamos a rede
+    if episode % 10 == 0:
+      trader.model.save("ai_trader_{}.h5".format(episode))
 
